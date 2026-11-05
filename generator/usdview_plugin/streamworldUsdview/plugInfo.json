@@ -1,0 +1,16 @@
+{
+    "Plugins": [
+        {
+            "Type": "python",
+            "Name": "streamworldUsdview",
+            "Info": {
+                "Types": {
+                    "streamworldUsdview.LodPluginContainer": {
+                        "bases": ["pxr.Usdviewq.plugin.PluginContainer"],
+                        "displayName": "Eldermark UsdLod"
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+# Generated output and local builds (regenerate with generator/run.sh; see README.md)
+world/
+build/
+openusd_build/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local tool state
+.ngen-assets/
+.ngen-discovery/
+imgui.ini
+notes.md
+*.tmp.*

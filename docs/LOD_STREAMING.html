@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Eldermark LOD and Streaming</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: specification document; one reading column (~72ch), wide figures and tables to ~1040px; survey-map palette. */
+:root {
+  --bg: #f2f4f1; --surface: #ffffff; --ink: #1c2521; --muted: #5a6862; --line: #d4dcd7; --grid: #e6ebe7;
+  --accent: #1d6b58; --accent-soft: #cfe6dd; --warm: #b8720b; --warm-soft: #f4e3c4; --hot: #b93a2e;
+  --cool: #3a679e; --cool-soft: #d6e2f1;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111714; --surface: #18201c; --ink: #e2eae5; --muted: #98a9a0; --line: #2b3631; --grid: #212a26;
+    --accent: #4dbb9a; --accent-soft: #1d3d33; --warm: #e2a440; --warm-soft: #3d2f15; --hot: #e8685b;
+    --cool: #7ea9dd; --cool-soft: #1f2e42; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111714; --surface: #18201c; --ink: #e2eae5; --muted: #98a9a0; --line: #2b3631; --grid: #212a26;
+  --accent: #4dbb9a; --accent-soft: #1d3d33; --warm: #e2a440; --warm-soft: #3d2f15; --hot: #e8685b;
+  --cool: #7ea9dd; --cool-soft: #1f2e42; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 96px;
+}
+main { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 60px; }
+.prose { max-width: 72ch; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.01em; display: flex; gap: 12px; align-items: baseline; }
+h2 .no { font-family: var(--f-mono); font-size: 0.95rem; font-weight: 500; color: var(--muted); }
+h3 { font-size: 1.12rem; font-weight: 700; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 16px; }
+section > h3 { margin-top: 10px; }
+.eyebrow { font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 22px; font-family: var(--f-mono); font-size: 0.8rem; color: var(--muted); }
+code { font-family: var(--f-mono); font-size: 0.87em; }
+:not(pre) > code { background: var(--grid); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--warm); outline-offset: 2px; }
+header { display: flex; flex-direction: column; gap: 14px; }
+.lede { font-size: 1.12rem; max-width: 66ch; }
+ul, ol { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+
+nav.toc { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-block: 14px; }
+nav.toc ol { columns: 2 260px; column-gap: 32px; display: block; padding-left: 1.6em; }
+nav.toc li { margin-bottom: 4px; break-inside: avoid; }
+
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+figcaption { font-size: 0.88rem; color: var(--muted); max-width: 84ch; }
+.scroll { overflow-x: auto; }
+pre { margin: 0; }
+pre.code { font-family: var(--f-mono); font-size: 0.8rem; line-height: 1.55; background: var(--surface); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; border-radius: 3px; }
+pre.code .c { color: var(--muted); }
+pre.code .k { color: var(--accent); font-weight: 500; }
+pre.code .n { color: var(--warm); font-weight: 500; }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; background: var(--surface); }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 500; background: var(--bg); }
+td.num, th.num { text-align: right; white-space: nowrap; }
+tr.sub td { color: var(--muted); }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px; }
+.grid2 > * { min-width: 0; }
+dl.terms { display: grid; grid-template-columns: minmax(120px, 180px) minmax(0, 1fr); gap: 8px 20px; margin: 0; }
+dl.terms dt { font-family: var(--f-mono); font-size: 0.86rem; font-weight: 500; }
+dl.terms dd { margin: 0; }
+@media (max-width: 560px) { dl.terms { grid-template-columns: 1fr; } dl.terms dd { margin-bottom: 8px; } }
+
+.rule { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; }
+.note { font-size: 0.9rem; color: var(--muted); border-left: 3px solid var(--warm); padding: 4px 0 4px 12px; max-width: 80ch; }
+.must { font-family: var(--f-mono); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; color: var(--surface); background: var(--accent); padding: 1px 6px; border-radius: 3px; vertical-align: 1px; }
+.may { font-family: var(--f-mono); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.04em; color: var(--ink); background: var(--warm-soft); padding: 1px 6px; border-radius: 3px; vertical-align: 1px; }
+
+/* hierarchy diagram */
+.tree { display: flex; flex-direction: column; gap: 10px; font-size: 0.86rem; }
+.node { border: 1px solid var(--line); background: var(--bg); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-radius: 3px; }
+.node > .h { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.node > .h b { font-family: var(--f-display); font-size: 0.98rem; }
+.node > .h span { color: var(--muted); font-family: var(--f-mono); font-size: 0.76rem; }
+.levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.lvl { border: 1px solid var(--line); background: var(--surface); padding: 8px 10px; border-radius: 3px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lvl b { font-family: var(--f-mono); font-size: 0.82rem; }
+.lvl .arc { font-family: var(--f-mono); font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.lvl .arc.p { color: var(--cool); }
+.lvl .arc.r { color: var(--warm); }
+.lvl small { color: var(--muted); font-size: 0.78rem; }
+.nest { margin-left: 18px; border-left: 2px solid var(--line); padding-left: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+/* map */
+.mapwrap { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .mapwrap { grid-template-columns: 1fr; } }
+#map { width: 100%; height: auto; display: block; touch-action: none; cursor: crosshair; border: 1px solid var(--line); }
+.stats { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; font-size: 0.86rem; font-variant-numeric: tabular-nums; margin: 0; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; text-align: right; font-family: var(--f-mono); }
+.stats .sep { grid-column: 1 / -1; border-top: 1px solid var(--line); margin: 4px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 5px; border: 1px solid var(--line); }
+.btn { font: 500 0.82rem var(--f-body); background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; cursor: pointer; align-self: flex-start; }
+.controls { display: flex; flex-direction: column; gap: 14px; }
+.hint { font-size: 0.82rem; color: var(--muted); }
+svg text { font-family: var(--f-mono); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="eyebrow">Specification · world format v2 · streaming partition with streaming domain</div>
+  <h1>Eldermark LOD and Streaming</h1>
+  <p class="lede">How the Eldermark test world encodes level of detail and streaming in OpenUSD with UsdLod, and what an
+  engine has to implement to draw and stream it. The numbers come from the generated world: a 10 km × 10 km march of
+  100 regions and 1600 tiles, 31 assets (68 variants) with 8 levels each.</p>
+  <div class="meta">
+    <span>29 Oct 2026</span>
+    <span>world/root.usda · config/world.toml · world/manifest.json</span>
+    <span>reference implementation: generator/streamworld/lodselect.py</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#terms">Terms</a></li>
+    <li><a href="#world">World and coordinates</a></li>
+    <li><a href="#hierarchy">Hierarchy and files</a></li>
+    <li><a href="#authoring">USD authoring contract</a></li>
+    <li><a href="#domains">Heuristic domains and thresholds</a></li>
+    <li><a href="#draw">Selecting what to draw</a></li>
+    <li><a href="#stream">Streaming: what to keep resident</a></li>
+    <li><a href="#assets">Asset LOD and instancing</a></li>
+    <li><a href="#terrain">Terrain, seams and materials</a></li>
+    <li><a href="#physics">Physics</a></li>
+    <li><a href="#measured">Measured behaviour</a></li>
+    <li><a href="#checklist">Engine checklist</a></li>
+    <li><a href="#reference">Tools and reference</a></li>
+  </ol>
+</nav>
+
+<section id="terms">
+  <h2><span class="no">1</span>Terms</h2>
+  <dl class="terms prose">
+    <dt>cell</dt><dd>A square of the streaming grid. Two cell levels: <b>region</b> (1000 m, 10 × 10 in the world) and <b>tile</b> (250 m, 4 × 4 per region).</dd>
+    <dt>LOD root</dt><dd>A prim with <code>LODRootAPI</code>. Every cell and every placed asset is one.</dd>
+    <dt>level</dt><dd>One child of a LOD root, a complete representation of it. Index 0 is the finest. A cell's level 0 is called <code>full</code>.</dd>
+    <dt>domain</dt><dd>The <code>lod:domain</code> of a heuristic: <code>imaging</code> (what is drawn), <code>streaming</code> (what is resident), <code>physics</code> (what collides).</dd>
+    <dt>resident</dt><dd>A level whose content is composed: a payload level after it is loaded, a referenced level always.</dd>
+    <dt>drawn</dt><dd>The level the engine renders for a root this frame. It is resident by construction.</dd>
+    <dt>ring</dt><dd>The band of distances in which one level of a cell kind is drawn, for example tile <code>medium</code> from 220 to 420 m.</dd>
+    <dt>distance</dt><dd>Always the distance from the camera position to the root's bounding box (0 inside it), never to its centre.</dd>
+  </dl>
+</section>
+
+<section id="world">
+  <h2><span class="no">2</span>World and coordinates</h2>
+  <p class="prose">10 km × 10 km, centred on the origin, <code>upAxis = Z</code>, <code>metersPerUnit = 1</code>, x east, y north.
+  Region <code>R_i_j</code> spans x from −5000 + 1000·i and y from −5000 + 1000·j. Tile <code>T_a_b</code> is the a-th column
+  and b-th row inside its region. Every cell prim carries a translate to its centre, and payload content is in
+  cell-local coordinates, so points stay within ±500 m (regions) or ±125 m (tiles) and are exact in single
+  precision.</p>
+</section>
+
+<section id="hierarchy">
+  <h2><span class="no">3</span>Hierarchy and files</h2>
+  <p class="prose">The world is a two-level grid of LOD roots. A region's <code>full</code> level contains its 16 tile roots.
+  A tile's <code>full</code> level contains 25 ground-chunk roots (0.5 m and 1 m terrain), every placed asset and the
+  ground cover. Every other level is reduced terrain plus one <code>PointInstancer</code> of the assets' own LOD levels.</p>
+  <figure>
+    <div class="tree">
+      <div class="node">
+        <div class="h"><b>/World/Regions/R_i_j</b><span>region LOD root · 1000 m · default proxy</span></div>
+        <div class="levels">
+          <div class="lvl"><b>full</b><span class="arc r">reference · always composed</span><small>R_i_j_full.usda · 70 KB<br>16 tile roots and their heuristics</small></div>
+          <div class="lvl"><b>medium</b><span class="arc p">payload</span><small>R_i_j_medium.usdc · 2.7 MB<br>5 m terrain (82k tris), 40k asset instances (0.87 M tris)</small></div>
+          <div class="lvl"><b>proxy</b><span class="arc p">payload</span><small>R_i_j_proxy.usdc · 0.63 MB<br>10 m terrain (21k tris), 8k instances: trees over 5 m, large assets (0.32 M tris)</small></div>
+        </div>
+        <div class="nest">
+          <div class="node">
+            <div class="h"><b>…/R_i_j/full/T_a_b</b><span>tile LOD root · 250 m · default simplified</span></div>
+            <div class="levels">
+              <div class="lvl"><b>full</b><span class="arc p">payload</span><small>R_i_j_T_a_b_full.usdc · 5.3 MB<br>25 ground chunks (1 m base inline), 3.0k asset instances, 70k ground-cover points</small></div>
+              <div class="lvl"><b>medium</b><span class="arc p">payload</span><small>…_medium.usdc · 0.64 MB<br>2 m terrain (32k tris), 2.8k instances (90k tris)</small></div>
+              <div class="lvl"><b>simplified</b><span class="arc p">payload</span><small>…_simplified.usdc · 0.19 MB<br>5 m terrain (5k tris), 2.6k instances (60k tris)</small></div>
+            </div>
+            <div class="nest">
+              <div class="node">
+                <div class="h"><b>…/T_a_b/full/G_c_d</b><span>ground chunk LOD root · 50 m · default base</span></div>
+                <div class="levels">
+                  <div class="lvl"><b>fine</b><span class="arc p">payload</span><small>R_i_j_T_a_b_ground.usdc&lt;/…/G_c_d&gt; · 0.35 MB<br>0.5 m terrain + micro-relief, per-tile texture · 21k tris</small></div>
+                  <div class="lvl"><b>base</b><span class="arc r">inline</span><small>in the tile's full level<br>1 m terrain + skirt, collision · 5.4k tris</small></div>
+                </div>
+              </div>
+              <div class="node">
+                <div class="h"><b>…/T_a_b/full/Trees/oak_00042</b><span>instanceable placement → asset LOD root · lod0 … lod7</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>Levels in order, finest first. Sizes are world averages of the files on disk. Every step from one level to the
+    next coarser one is a large drop in data (chunk: 0.35 MB fine → inline base; tile: 5.3 → 0.64 → 0.19 MB; region: 16
+    simplified tiles = 3.0 MB → medium 2.7 MB → proxy 0.63 MB). Triangles are dominated by the instanced asset levels,
+    which a renderer draws with GPU instancing.</figcaption>
+  </figure>
+<pre class="code"><span class="c"># files, relative to world/</span>
+root.usda                                    <span class="c">/World, /World/Regions (100 region roots), sublayers environment + viewpoints</span>
+regions/R_4_5/R_4_5_full.usda                <span class="c">region full level (referenced): tile roots + LODHeuristics</span>
+regions/R_4_5/R_4_5_medium.usdc              <span class="c">region medium (payload)</span>
+regions/R_4_5/R_4_5_proxy.usdc               <span class="c">region proxy (payload)</span>
+regions/R_4_5/tiles/R_4_5_T_1_3_full.usdc    <span class="c">tile full (payload): ground chunk roots, placements, ground cover</span>
+regions/R_4_5/tiles/R_4_5_T_1_3_ground.usdc  <span class="c">fine ground: one prim per chunk, each a payload target</span>
+regions/R_4_5/tiles/R_4_5_T_1_3_medium.usdc
+regions/R_4_5/tiles/R_4_5_T_1_3_simplified.usdc
+assets/&lt;category&gt;/&lt;name&gt;.usda, &lt;name&gt;_geom.usdc   <span class="c">asset interface (LOD root, variants) and geometry</span>
+materials/library.usda, textures/…
+manifest.json                                <span class="c">machine-readable description of all of the above</span></pre>
+</section>
+
+<section id="authoring">
+  <h2><span class="no">4</span>USD authoring contract</h2>
+  <p class="prose">These rules hold for every LOD root in the world. <code>validate</code> checks each of them, so an engine can rely on them.</p>
+  <ul class="prose">
+    <li><span class="must">MUST</span> A root's levels are exactly its active, defined children, in order, finest first. Nothing else is a child of a LOD root.</li>
+    <li><span class="must">MUST</span> <code>lod:default:index</code> is the coarsest level. Every other level is authored <code>visibility = invisible</code>. A consumer that ignores UsdLod therefore draws the cheapest complete world: 100 region proxies: 2.1 M terrain triangles plus 0.83 M instanced lod7 assets (31.6 M triangles).</li>
+    <li><span class="must">MUST</span> Heuristics and their bounds live in a sibling <code>LODHeuristics/&lt;cell&gt;</code> Xform with the cell's transform, never inside the root. They are composed while every level is unloaded, which is when a streamer needs them.</li>
+    <li><span class="must">MUST</span> Every <code>thresholds</code> array has levels − 1 values. Distance thresholds ascend, screen-size thresholds descend. Blend thresholds are empty or have the same count.</li>
+    <li><span class="must">MUST</span> Each heuristic's bounding volume (a guide-purpose box mesh, plus <code>center</code> or <code>extent</code>) contains the content of every level of its root.</li>
+    <li><span class="must">MUST</span> Per level boundary: imaging distance threshold ≤ streaming load radius ≤ streaming unload radius.</li>
+    <li><span class="must">MUST</span> A child cell's thresholds lie inside its parent's first boundary. Tile imaging (≤ 420 m) is below region imaging (600 m), and tile unload (≤ 580 m) is below region load (700 m).</li>
+    <li><span class="may">MAY</span> The full level of a non-finest cell is a payload or a reference (<code>full_arc</code>). In this world it is a reference.</li>
+  </ul>
+<pre class="code"><span class="c"># root.usda: a region root (abridged)</span>
+<span class="k">def</span> Xform "R_4_5" (prepend apiSchemas = ["GeomModelAPI", "LODRootAPI"]  kind = "group"  customData = {string cell = "R_4_5"})
+{
+    float3[] extentsHint = [(-509.20, -508.93, -13.71), (504.69, 509.58, 58.42)]
+    int lod:default:index = 2
+    rel lod:heuristics = [&lt;/World/Regions/LODHeuristics/R_4_5/imaging_distance&gt;,
+                          &lt;/World/Regions/LODHeuristics/R_4_5/imaging_screen&gt;,
+                          &lt;/World/Regions/LODHeuristics/R_4_5/<span class="n">streaming_distance</span>&gt;]
+    double3 xformOp:translate = (-500, 500, 0)
+
+    <span class="k">def</span> Xform "full"   (prepend <span class="n">references</span> = @./regions/R_4_5/R_4_5_full.usda@)   { token visibility = "invisible" }
+    <span class="k">def</span> Xform "medium" (prepend payload = @./regions/R_4_5/R_4_5_medium.usdc@)    { token visibility = "invisible" }
+    <span class="k">def</span> Xform "proxy"  (prepend payload = @./regions/R_4_5/R_4_5_proxy.usdc@)     { }
+}
+
+<span class="c"># regions/R_4_5/R_4_5_full.usda: a tile's heuristics (abridged)</span>
+<span class="k">def</span> Xform "T_1_3" {                                   <span class="c"># under /R_4_5_full/LODHeuristics, same translate as the tile root</span>
+    <span class="k">def</span> Mesh "bounds" { uniform token purpose = "guide"  point3f[] points = [ …8 box corners… ] }
+    <span class="k">def</span> LODDistanceHeuristic "imaging_distance" {
+        uniform token lod:domain = "imaging"
+        uniform float[] thresholds = [220, 420]
+        uniform float[] blendThresholds = [250, 460]
+        rel boundingVolume = &lt;../bounds&gt;
+    }
+    <span class="k">def</span> LODScreenSizeHeuristic "imaging_screen" {
+        uniform token lod:domain = "imaging"
+        uniform token projectionMethod = "projectedSphere"
+        uniform float[] thresholds = [0.7357, 0.3011]
+        uniform float[] blendThresholds = [0.6255, 0.262]
+    }
+    <span class="k">def</span> LODDistanceHeuristic "physics_distance" {
+        uniform token lod:domain = "physics"
+        uniform float[] thresholds = [120, 420]
+    }
+    <span class="k">def</span> LODDistanceHeuristic "<span class="n">streaming_distance</span>" {
+        uniform token lod:domain = "<span class="n">streaming</span>"
+        uniform float[] thresholds = [300, 500]                    <span class="c"># load radius per boundary</span>
+        custom uniform float[] <span class="n">streaming:unloadThresholds</span> = [360, 580]  <span class="c"># unload radius per boundary</span>
+        rel boundingVolume = &lt;../bounds&gt;
+    }
+}</pre>
+  <p class="note">UsdLod defines the <code>imaging</code>, <code>physics</code> and <code>audio</code> domains. <code>streaming</code> is a
+  custom domain token, and <code>streaming:unloadThresholds</code> is a custom attribute; UsdLod has no notion of residency
+  or hysteresis. Both pass <code>usdchecker</code> and the UsdValidation validators.</p>
+</section>
+
+<section id="domains">
+  <h2><span class="no">5</span>Heuristic domains and thresholds</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Root</th><th>Levels</th><th class="num">Imaging switch (blend to)</th><th class="num">Screen size (blend)</th><th class="num">Streaming load / unload</th><th class="num">Physics</th></tr></thead>
+    <tbody>
+      <tr><td>Region</td><td>full · medium · proxy</td><td class="num">600 (680) · 1200 (1300) m</td><td class="num">1.107 (0.964) · 0.467 (0.417)</td><td class="num">700 / 800 · 1400 / 1600 m</td><td class="num">n/a</td></tr>
+      <tr><td>Tile</td><td>full · medium · simplified</td><td class="num">220 (250) · 420 (460) m</td><td class="num">0.736 (0.626) · 0.301 (0.262)</td><td class="num">300 / 360 · 500 / 580 m</td><td class="num">120 · 420 m</td></tr>
+      <tr><td>Asset</td><td>lod0 … lod7</td><td class="num">screen size only</td><td class="num">per class, see §8</td><td class="num">with its tile</td><td class="num">rocks 60 m, structures 80 m</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <figure>
+    <div class="scroll"><svg id="rings" viewBox="0 0 940 260" role="img" aria-label="Rings of drawn levels around the camera with streaming load radii, to scale up to 2 km"></svg></div>
+    <figcaption>What is drawn at each distance from the camera to a cell's box, to scale up to 2 km. Markers below the bars are
+    the streaming load radii: each level is loaded 80–200 m before it is drawn. Tile rings only exist inside regions that draw
+    <code>full</code> (closer than 600–640 m).</figcaption>
+  </figure>
+  <h3>Imaging, distance form</h3>
+  <p class="prose">The LOD value of a root at distance <i>d</i> is a sum over its boundaries <i>i</i> with threshold <i>t<sub>i</sub></i> and blend threshold <i>b<sub>i</sub></i>:</p>
+<pre class="code">value(d) = Σ<sub>i</sub>  { 0                         if d &lt; t<sub>i</sub>
+           { min(1, (d − t<sub>i</sub>) / (b<sub>i</sub> − t<sub>i</sub>))   if d ≥ t<sub>i</sub>   <span class="c">(1 when there is no blend band)</span>
+
+drawn level   = floor(value + 0.5)                       <span class="c"># an engine that does not cross-fade</span>
+cross-fade    = levels floor(value) and ceil(value), weight frac(value)</pre>
+  <p class="prose">This is what <code>UsdLod.DistanceHeuristicQuery.ComputeLOD</code> returns, and what the manifest's expected
+  levels are computed with. Without cross-fading, a tile switches full → medium at 235 m and medium → simplified at 440 m;
+  a region switches at 640 m and 1250 m.</p>
+  <h3>Imaging, screen-size form</h3>
+  <p class="prose">For engines that prefer projected size, every cell also has a <code>projectedSphere</code> screen-size
+  heuristic. Its thresholds are calibrated so the switch happens at the distance thresholds for the reference camera
+  (36 mm aperture, 24 mm focal length, 16:9). Values above 1 are normal: they mean that the sphere around a 1 km cell
+  covers more than the view. Assets have screen-size heuristics only.</p>
+  <p class="note">The screen-size thresholds are calibrated on one representative cell extent, and a projected sphere grows with
+  a cell's height range. So with the screen-size form, switch distances vary from cell to cell. At the validation viewpoints
+  it picks the same cell level as the distance form 56–89 % of the time. The distance form is the reference.</p>
+  <h3>Streaming</h3>
+  <p class="prose">The streaming heuristic has the same shape as the imaging distance heuristic. Its thresholds are the load
+  radii, and <code>streaming:unloadThresholds</code> are the matching unload radii. §7 defines how they are used.</p>
+</section>
+
+<section id="draw">
+  <h2><span class="no">6</span>Selecting what to draw</h2>
+  <p class="prose">Every frame, walk from the regions down. A root's children are only visited when the root draws
+  <code>full</code>. A level that is not resident is never drawn: the root falls back to the nearest coarser resident level.</p>
+<pre class="code"><span class="k">def</span> select_drawn(eye):
+    queue = region_roots()
+    <span class="k">while</span> queue:
+        root   = queue.pop()
+        value  = imaging_heuristic(root).ComputeLOD(distance_to_box(eye, root))
+        want   = round_half_up(value)                  <span class="c"># or cross-fade floor/ceil</span>
+        drawn  = first(i <span class="k">for</span> i <span class="k">in</span> want .. last <span class="k">if</span> resident(root.level[i]))
+        <span class="k">if</span> drawn != want:  stats.late += 1            <span class="c"># content was not ready: coarser stand-in</span>
+        show(root.level[drawn]); hide(other levels)
+        <span class="k">if</span> drawn == 0:  queue += child_roots(root.level[0])   <span class="c"># tiles, or asset roots in a tile</span></pre>
+  <p class="note">Reference: <code>Selector.select(frustum, load=False)</code> in <code>lodselect.py</code>. The usdview plugin
+  applies the result as session-layer visibility, because Storm does not implement UsdLod.</p>
+</section>
+
+<section id="stream">
+  <h2><span class="no">7</span>Streaming: what to keep resident</h2>
+  <p class="prose">Residency is decided separately from drawing, by the <code>streaming</code> domain. Per root, the streamer
+  keeps a state <i>s</i>, the finest level that must be resident. The root's level <i>s</i> and every coarser level stay
+  resident, so the fallback chain in §6 always has an answer.</p>
+<pre class="code"><span class="k">def</span> update_residency(eye):
+    wanted = {}
+    queue  = region_roots()
+    <span class="k">while</span> queue:
+        root  = queue.pop()
+        d     = distance_to_box(eye, root)
+        s_load   = count(t &lt;= d <span class="k">for</span> t <span class="k">in</span> load_radii(root))        <span class="c"># streaming thresholds</span>
+        s_unload = count(u &lt;= d <span class="k">for</span> u <span class="k">in</span> unload_radii(root))      <span class="c"># streaming:unloadThresholds</span>
+        prev  = state.get(root)
+        s     = s_load <span class="k">if</span> prev <span class="k">is None or</span> s_load &lt;= prev <span class="k">else</span> min(s_load, max(prev, s_unload))
+        state[root] = s                                         <span class="c"># hysteresis: finer at once, coarser late</span>
+        wanted |= payload_levels(root, s .. last)               <span class="c"># s and every coarser level</span>
+        <span class="k">if</span> s == 0:  queue += child_roots(root.level[0])       <span class="c"># children only while full is wanted</span>
+    forget state of roots not visited
+    request(wanted − resident);  release(resident − wanted)    <span class="c"># cancel in-flight requests that became unwanted</span></pre>
+  <div class="grid2">
+    <figure>
+      <svg id="hyst" viewBox="0 0 460 250" role="img" aria-label="Hysteresis of a tile's full level between the 300 m load and 360 m unload radius"></svg>
+      <figcaption>A tile's <code>full</code> level. Coming closer, it is requested at 300 m, 65 m before it is drawn at 235 m.
+      Moving away, it stays resident until 360 m, so a camera wandering between 220 and 360 m costs no reloads.</figcaption>
+    </figure>
+    <figure>
+      <svg id="states" viewBox="0 0 460 250" role="img" aria-label="Life cycle of one payload level: unwanted, requested, resident, drawn"></svg>
+      <figcaption>Life cycle of one payload level. Only a resident level can be drawn. A request that becomes unwanted
+      before it completes is cancelled.</figcaption>
+    </figure>
+  </div>
+  <h3>Choosing the radii</h3>
+  <p class="prose">The load radius is the imaging switch distance plus the prefetch lead: lead time × camera speed. With the
+  current values, a tile's full level is requested 65 m before it is drawn, which is 2.2 s at 30 m/s. The replay in §11
+  shows a median lead of 2.3 s and a minimum of 0.2 s at 50 MB/s. The unload radius sets how far the camera can back off
+  without a reload. 60–80 m covers most wandering along an edge.</p>
+  <h3>Request order</h3>
+  <p class="prose">The reference streamer issues requests in path order on one channel. An engine <span class="may">MAY</span>
+  prioritise: coarser levels before finer ones (they are the fallback), then nearer roots first. The measurements in §11
+  use the simple order, so they are a conservative baseline.</p>
+  <figure>
+    <div class="mapwrap">
+      <svg id="map" viewBox="0 0 600 600" role="img" aria-label="Top-down map of a 4 km window of the world with the camera, what is drawn and what is resident"></svg>
+      <div class="controls">
+        <div class="legend">
+          <span><i style="background:var(--grid);border-color:var(--muted)"></i>region medium</span>
+          <span><i style="background:var(--cool-soft)"></i>tile simplified</span>
+          <span><i style="background:var(--accent-soft)"></i>tile medium</span>
+          <span><i style="background:var(--accent)"></i>tile full</span>
+          <span><i style="background:var(--warm-soft);border-color:var(--warm)"></i>tile full prefetched</span>
+        </div>
+        <dl class="stats" id="stats"></dl>
+        <button class="btn" id="reset" type="button">Reset counters</button>
+        <p class="hint">A 4 km window of the march around Elderford (R_3_4 to R_6_7). Drag the camera. Regions beyond 1200 m draw their proxy. Distances are 2D, to each cell's square. Sizes are
+        world averages. Only tile <code>full</code> residency is tracked with hysteresis here; the other levels follow the same rule.</p>
+      </div>
+    </div>
+    <figcaption>Interactive: what is drawn and resident around the camera with the thresholds in §5.</figcaption>
+  </figure>
+</section>
+
+<section id="assets">
+  <h2><span class="no">8</span>Asset LOD and instancing</h2>
+  <p class="prose">Assets live only inside tile <code>full</code> levels, so they are streamed with their tile. Each placement is
+  an <code>instanceable</code> prim referencing the asset's interface file with a variant selection. Each asset × variant becomes
+  one prototype, which contains the asset's LOD root (<code>Geom</code>) with 8 levels. The default is <code>lod7</code>.</p>
+  <ul class="prose">
+    <li>Asset heuristics are <code>projectedSphere</code> screen-size heuristics with an authored extent per variant. Each threshold step is about 2× in projected size, so each switch removes about half the detail. The blend band is the upper 15 % of each step.</li>
+    <li>An engine evaluates asset roots per instance, because the selected level depends on the instance's transform, while the prototype stays shared. usdview can only do this by de-instancing a placement that needs a non-default level.</li>
+    <li>A tile is drawn <code>full</code> within 220–250 m of its box, so its assets can be up to about 575 m from the camera. That is why the coarse asset levels (switching at 200–770 m for large assets) are used.</li>
+    <li>Buildings (<code>[lod.assets.building]</code>) have 2.5× smaller screen thresholds than other structures, about 1.6× the switch distance.</li>
+    <li><b>Coarse cell levels instance the asset levels.</b> Every coarse level holds one <code>PointInstancer</code> whose prototypes reference <code>&lt;asset&gt;_geom.usdc&lt;/&lt;asset&gt;_geom/&lt;variant&gt;/lod&lt;i&gt;&gt;</code> and bind the asset's materials. Each instance carries the level its asset would select at the distance where that coarse level takes over (switch distances × instance scale), so a cell switch keeps every tree's shape: trees are lod5–6 in tile <code>medium</code>, lod7 in the region levels. Size filters per level drop small assets (bushes, small rocks) further out; region <code>proxy</code> keeps trees over 5 m. Prototypes author collision off.</li>
+    <li>Ground cover uses <code>PointInstancer</code>s, 4 chunks per tile, with no LOD. It is only drawn inside tile <code>full</code>.</li>
+  </ul>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Asset</th><th>Class</th><th class="num">Switch distances lod0→1 … lod6→7 (reference camera, m)</th><th class="num">Physics</th></tr></thead>
+    <tbody>
+      <tr><td>oak</td><td>tree</td><td class="num">49 · 71 · 101 · 145 · 207 · 298 · 428</td><td class="num"></td></tr>
+      <tr><td>pine</td><td>tree</td><td class="num">40 · 58 · 83 · 119 · 171 · 245 · 353</td><td class="num"></td></tr>
+      <tr><td>spruce</td><td>tree</td><td class="num">33 · 48 · 68 · 98 · 142 · 204 · 293</td><td class="num"></td></tr>
+      <tr><td>birch</td><td>tree</td><td class="num">32 · 45 · 65 · 92 · 132 · 190 · 273</td><td class="num"></td></tr>
+      <tr><td>shrub</td><td>bush</td><td class="num">13 · 19 · 27 · 39 · 57 · 82 · 118</td><td class="num"></td></tr>
+      <tr><td>cliff</td><td>rock</td><td class="num">31 · 45 · 65 · 95 · 139 · 202 · 293</td><td class="num">lod3 &lt; 60 m, lod7 beyond</td></tr>
+      <tr><td>boulder</td><td>rock</td><td class="num">5 · 8 · 11 · 17 · 24 · 35 · 51</td><td class="num">lod3 &lt; 60 m, lod7 beyond</td></tr>
+      <tr><td>tower</td><td>structure</td><td class="num">24 · 35 · 50 · 72 · 104 · 149 · 215</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>rock_arch</td><td>structure</td><td class="num">51 · 74 · 107 · 154 · 222 · 319 · 460</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>house</td><td>building</td><td class="num">28 · 40 · 58 · 83 · 120 · 172 · 248</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>windmill</td><td>building</td><td class="num">53 · 77 · 112 · 161 · 233 · 336 · 485</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>keep</td><td>building</td><td class="num">76 · 109 · 156 · 224 · 322 · 462 · 665</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>wizard_tower</td><td>building</td><td class="num">92 · 132 · 190 · 273 · 394 · 566 · 816</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>dragon_bones</td><td>structure</td><td class="num">85 · 123 · 177 · 256 · 369 · 531 · 766</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>runestone</td><td>structure</td><td class="num">5 · 7 · 10 · 15 · 22 · 31 · 45</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr><td>fence</td><td>structure</td><td class="num">8 · 11 · 16 · 24 · 34 · 49 · 70</td><td class="num">lod4 &lt; 80 m, lod7 beyond</td></tr>
+      <tr class="sub"><td colspan="4">All 31 assets and their variants: <code>manifest.json → assets[].reference_switch_distances_m</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="terrain">
+  <h2><span class="no">9</span>Terrain, seams and materials</h2>
+  <ul class="prose">
+    <li>Every terrain mesh samples one global 1 m heightfield: ground chunk base at 1 m, tile medium at 2 m, tile simplified and region medium at 5 m, region proxy at 10 m. Neighbours at the same level share bit-identical edge vertices and normals.</li>
+    <li><b>Ground chunks.</b> A tile's <code>full</code> level has 25 chunk roots of 50 m (children of the level, like tiles inside a region's <code>full</code>), with <code>customData.ground = true</code>. <code>fine</code> (drawn within 50 m, blend to 58 m; loaded from 100 m, released beyond 120 m) is a 0.5 m mesh: Catmull-Rom interpolation of the heightfield plus synthesized micro-relief (tussocks, forest-floor hummocks, ridged rock, ridge-and-furrow on the farm strips, smoothed paths and settlements), on a per-tile 1024² texture (0.24 m/texel) sampled from the terrain source textures. It is a payload into one prim of the tile's <code>_ground.usdc</code>, so one file per tile serves 25 payloads; the fine level prim carries <code>customData.bytes</code> (its geometry size) for streaming budgets. <code>base</code> is the 1 m mesh inline in the tile's full level, the default, and the collision level.</li>
+    <li><span class="must">MUST NOT</span> stitch. Different levels can sit side by side (a tile at full next to one at medium, or a region's tiles next to a neighbouring region's medium). Every terrain mesh has a vertical skirt deep enough to cover the worst gap against any level that can neighbour it. Validation measures the real gaps at every pair of levels.</li>
+    <li>Tile levels and region <code>medium</code> use the <code>terrain</code> material: the region's 2048² baked colour plus a tiled detail normal. Region <code>proxy</code> uses <code>terrain_far</code>: a 1024² colour and a macro normal map baked against the proxy's 10 m grid. So the 600 m switch (tiles to region medium) changes geometry density but not shading.</li>
+    <li>Materials are UsdPreviewSurface, with texture inputs overridden per cell through Material interface inputs.</li>
+  </ul>
+</section>
+
+<section id="physics">
+  <h2><span class="no">10</span>Physics</h2>
+  <ul class="prose">
+    <li>Tiles have a <code>physics</code> distance heuristic: 1 m terrain within 120 m, 2 m terrain to 420 m, 5 m beyond. Physics needs those levels resident too. The streaming radii already cover it, because physics thresholds are not larger than the imaging ones.</li>
+    <li>Every collider (a mesh with <code>PhysicsCollisionAPI</code>) authors <code>physics:collisionEnabled</code> explicitly: <code>true</code> on its root's default level, <code>false</code> on every other level. Nothing relies on the schema fallback. A consumer that ignores UsdLod therefore collides with exactly the default levels: the chunk <code>base</code> meshes inside a loaded tile <code>full</code>, tile <code>simplified</code> and region <code>proxy</code> terrain, and asset lod7. Point-instanced stand-ins in coarse levels are always <code>false</code>. A physics-aware consumer moves the <code>true</code> to the level its physics heuristic selects, the same way the renderer handles visibility.</li>
+    <li>Rocks and structures have physics heuristics that select decimated levels (rocks lod3 near, structures lod4 near, lod7 hulls far). Render lod0 is never used for collision.</li>
+  </ul>
+</section>
+
+<section id="measured">
+  <h2><span class="no">11</span>Measured behaviour</h2>
+  <p class="prose"><code>generator/run.sh stream-replay</code> flies the 26.8 km flight path (59 cameras along the King's Road
+  through the villages, past the castle and the wizard's spire, crossing tile and region edges, then a fast high sweep across
+  the south and west). It simulates loading as requests on one I/O channel: 50 ms latency per request plus size ÷ bandwidth,
+  with sizes from the files on disk. Two policies are compared on the same world: <b>draw-only</b> loads exactly the drawn
+  level and releases it as soon as it isn't drawn; <b>streaming</b> is §7.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>30 m/s, 50 MB/s</th><th class="num">draw-only</th><th class="num">streaming</th></tr></thead>
+    <tbody>
+      <tr><td>Late draws (level drawn coarser than selected)</td><td class="num">5667</td><td class="num"><b>5</b></td></tr>
+      <tr><td>Root-seconds drawn coarser</td><td class="num">8648</td><td class="num"><b>0.1</b></td></tr>
+      <tr><td>Lead time, min / median</td><td class="num">0 / 0.04 s</td><td class="num">0 / 2.0 s</td></tr>
+      <tr><td>Loads · of which reloads</td><td class="num">3735 · 1157</td><td class="num">3526 · 200</td></tr>
+      <tr><td>Data loaded during the flight</td><td class="num">3436 MB</td><td class="num">3727 MB</td></tr>
+      <tr><td>Peak requested in one second</td><td class="num">20.5 MB</td><td class="num">24.6 MB</td></tr>
+      <tr><td>Peak resident</td><td class="num">154 MB</td><td class="num">238 MB</td></tr>
+      <tr><td>Resident at start (warm)</td><td class="num">118 MB</td><td class="num">171 MB</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Streaming policy under load</th><th class="num">Late draws</th><th class="num">Root-seconds coarser</th><th class="num">Lead min / median</th><th class="num">Peak queue</th></tr></thead>
+    <tbody>
+      <tr><td>30 m/s, 50 MB/s</td><td class="num">5</td><td class="num">0.1</td><td class="num">0 / 2.0 s</td><td class="num">1.7 s</td></tr>
+      <tr><td>30 m/s, 20 MB/s</td><td class="num">8</td><td class="num">1.2</td><td class="num">0 / 2.0 s</td><td class="num">2.1 s</td></tr>
+      <tr><td>30 m/s, 10 MB/s</td><td class="num">121</td><td class="num">48.5</td><td class="num">0 / 1.6 s</td><td class="num">3.1 s</td></tr>
+      <tr><td>30 m/s, 5 MB/s</td><td class="num">1479</td><td class="num">15184</td><td class="num">0 / 0.08 s</td><td class="num">25.8 s</td></tr>
+      <tr><td>8 m/s (running), 50 MB/s</td><td class="num">4</td><td class="num">0.0</td><td class="num">0 / 8.0 s</td><td class="num">1.7 s</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="prose">Reading these numbers:</p>
+  <ul class="prose">
+    <li>With draw-only, every switch to a finer level is late, because the request starts when the level is needed. Streaming removes almost all late draws and cuts reloads by more than 80 % (1157 to 200).</li>
+    <li>The replay composes a <code>full</code> level once it is resident, so the ground chunks inside a tile's full level take part. Their fine levels are requested only after the tile's full level has landed, which makes them the last link in the chain: every remaining late draw at 50 MB/s is a fine ground chunk, briefly drawn with its 1 m base.</li>
+    <li>The cost is memory: about 1.5× the resident set, made up of prefetched finer levels plus the coarser fallback levels.</li>
+    <li>At 30 m/s the current radii need about 20 MB/s of sustained read bandwidth: at 20 MB/s 8 roots are briefly late (1.2 root-seconds in a 15-minute flight). Below that, late draws grow; at 5 MB/s the fine ground (about 600 MB over the flight) saturates the channel. Late draws fall back to a coarser level and never leave a hole.</li>
+    <li>Late draws count each root separately, so one late region switch shows up as several tile events.</li>
+  </ul>
+  <p class="note">Rendering budget for reference: the far field (100 region proxies) is 2.1 M terrain triangles plus 31.6 M
+  instanced triangles (0.83 M lod7 instances). A region medium is 82k terrain plus about 0.87 M instanced triangles. One tile
+  full is 135k terrain triangles (1 m base) plus about 0.82 M instanced triangles at the asset default level (3.0k instances,
+  70k ground-cover points); a fine ground chunk is 21k triangles.</p>
+</section>
+
+<section id="checklist">
+  <h2><span class="no">12</span>Engine checklist</h2>
+  <ol class="prose">
+    <li>Open <code>root.usda</code> with payloads unloaded. All cell roots and their heuristics are composed: 100 regions and 1600 tiles, 7.4 MB of structure (root.usda 430 KB plus 100 region <code>full</code> files of 70 KB). The 25 ground chunk roots of a tile appear when its <code>full</code> level is loaded.</li>
+    <li>For every root, read its levels (children, in order) and its heuristics by domain from <code>lod:heuristics</code>.</li>
+    <li>Each frame: update residency (§7) from the camera, issue asynchronous loads and releases, and cancel unwanted requests.</li>
+    <li>Each frame: select drawn levels (§6), falling back to coarser resident levels. Optionally cross-fade within blend bands.</li>
+    <li>Own visibility: show the drawn level and hide the others, overriding the authored defaults.</li>
+    <li>Inside drawn tile <code>full</code> levels, walk into the ground chunk roots like any nested cell, and select asset levels per instance with the screen-size heuristics.</li>
+    <li>Physics: select collision levels with the physics heuristics, and keep them resident.</li>
+    <li>Don't stitch terrain: skirts cover every level combination.</li>
+    <li>Measure late draws, lead time and reloads. Compare with §11 and <code>world/stream_replay.json</code>.</li>
+  </ol>
+</section>
+
+<section id="reference">
+  <h2><span class="no">13</span>Tools and reference</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>What</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Selection and streaming, reference implementation (standalone, depends only on pxr)</td><td><code>generator/streamworld/lodselect.py</code>: <code>Selector</code>, <code>Streamer</code>, <code>resident</code>, <code>streaming_heuristic</code>, <code>apply_to_session</code></td></tr>
+      <tr><td>Streaming simulation over the flight path</td><td><code>generator/run.sh stream-replay [--speed] [--bandwidth] [--latency] [--dt]</code> → <code>world/stream_replay.json</code></td></tr>
+      <tr><td>Interactive viewer</td><td><code>generator/usdview.sh --unloaded</code>, menu UsdLod: Apply LOD (Ctrl+L), Auto-update, Stream (streaming domain)</td></tr>
+      <tr><td>Validation of every rule in §4 and the viewpoint selections</td><td><code>generator/run.sh validate</code> → <code>world/validation.json</code>, <code>docs/VALIDATION.md</code></td></tr>
+      <tr><td>All parameters</td><td><code>config/world.toml</code>: <code>[[partition.levels]]</code> (levels, thresholds, streaming radii, <code>full_arc</code>), <code>[lod]</code> (assets, reference camera)</td></tr>
+      <tr><td>Machine-readable world description</td><td><code>world/manifest.json</code>: <code>parameters.partition</code>, <code>parameters.streaming</code>, <code>hierarchy</code> (per cell: bounds, levels, file stats, arcs, thresholds), <code>assets</code>, <code>viewpoints</code>, <code>flight_path</code></td></tr>
+      <tr><td>Design background</td><td><code>docs/DESIGN.md</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+</main>
+
+<script>
+(() => {
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const txt = (svg, x, y, s, attrs) => { const t = el("text", Object.assign({ x, y, fill: css("--muted"), "font-size": 11 }, attrs || {}), svg); t.textContent = s; return t; };
+
+  // World-average level sizes (MB), from the files on disk.
+  const MB = { tFull: 4.95, tMed: 0.98, tSimp: 0.31, rMed: 2.32, rProxy: 0.73 };
+  const REGION = 1000, TILE = 250;
+  const T_IMG = [220, 420], R_IMG = [600, 1200], T_LOAD = 300, T_UNLOAD = 360;
+
+  // ------------------------------------------------------------------ rings
+  function drawRings() {
+    const svg = document.getElementById("rings"); svg.textContent = "";
+    const L = 20, R = 20, W = 940 - L - R, M = 2000, X = d => L + d / M * W, y = 40, h = 52;
+    const segs = [[0, 235, "--accent", "tile full", "5.3 MB / tile", true], [235, 440, "--accent-soft", "tile medium", "0.64"],
+      [440, 640, "--cool-soft", "tile simpl.", "0.19"], [640, 1250, "--grid", "region medium", "2.7 MB / region"], [1250, M, "--bg", "region proxy", "0.63 MB / region"]];
+    for (const [a, b, tone, name, mb, dark] of segs) {
+      el("rect", { x: X(a), y, width: X(b) - X(a), height: h, fill: css(tone), stroke: css("--line") }, svg);
+      txt(svg, X(a) + 6, y + 21, name, { fill: dark ? css("--surface") : css("--ink") });
+      txt(svg, X(a) + 6, y + 38, mb, { fill: dark ? css("--surface") : css("--muted") });
+    }
+    txt(svg, L, 26, "drawn (switch points without cross-fade)", { "font-family": "IBM Plex Sans, sans-serif", "font-size": 12, fill: css("--ink") });
+    const ly = y + h + 26;
+    txt(svg, L, ly, "load radii", { fill: css("--warm") });
+    for (const [d, lab] of [[300, "tile full 300"], [500, "tile medium 500"], [700, "region tiles 700"], [1400, "region medium 1400"]]) {
+      el("path", { d: `M${X(d) - 5} ${ly + 14} L${X(d) + 5} ${ly + 14} L${X(d)} ${ly + 4} Z`, fill: css("--warm") }, svg);
+      txt(svg, X(d), ly + 30, lab, { fill: css("--warm"), "text-anchor": "middle" });
+    }
+    const ay = 222;
+    el("line", { x1: L, x2: 940 - R, y1: ay, y2: ay, stroke: css("--line") }, svg);
+    for (const d of [0, 250, 500, 750, 1000, 1250, 1500, 1750, 2000]) {
+      el("line", { x1: X(d), x2: X(d), y1: ay, y2: ay + 5, stroke: css("--muted") }, svg);
+      txt(svg, X(d), ay + 19, d + " m", { "text-anchor": d === 0 ? "start" : d === 2000 ? "end" : "middle" });
+    }
+  }
+
+  // ------------------------------------------------------------------ hysteresis
+  function drawHyst() {
+    const svg = document.getElementById("hyst"); svg.textContent = "";
+    const L = 70, R = 16, d0 = 150, d1 = 450, X = d => L + (d - d0) / (d1 - d0) * (460 - L - R);
+    const yRes = 70, yNo = 160;
+    txt(svg, 8, yRes + 4, "resident", { fill: css("--ink") });
+    txt(svg, 8, yNo + 4, "not", { fill: css("--ink") });
+    for (const [d, c, lab] of [[235, "--accent", "drawn < 235"], [300, "--warm", "load 300"], [360, "--warm", "unload 360"]]) {
+      el("line", { x1: X(d), x2: X(d), y1: 30, y2: 190, stroke: css(c), "stroke-dasharray": "4 3" }, svg);
+      txt(svg, X(d), 24, lab, { fill: css(c), "text-anchor": "middle" });
+    }
+    el("path", { d: `M${X(d1)} ${yNo} L${X(300)} ${yNo} L${X(300)} ${yRes} L${X(d0)} ${yRes}`, fill: "none", stroke: css("--accent"), "stroke-width": 2.4 }, svg);
+    el("path", { d: `M${X(d0)} ${yRes - 10} L${X(360)} ${yRes - 10} L${X(360)} ${yNo + 10} L${X(d1)} ${yNo + 10}`, fill: "none", stroke: css("--hot"), "stroke-width": 2.4, "stroke-dasharray": "6 4" }, svg);
+    txt(svg, X(400), yNo - 8, "approaching ←", { fill: css("--accent") });
+    txt(svg, X(380), yNo + 28, "moving away →", { fill: css("--hot") });
+    el("line", { x1: L, x2: 460 - R, y1: 212, y2: 212, stroke: css("--line") }, svg);
+    for (const d of [150, 250, 350, 450]) txt(svg, X(d), 230, d + " m", { "text-anchor": "middle" });
+  }
+
+  // ------------------------------------------------------------------ state machine
+  function drawStates() {
+    const svg = document.getElementById("states"); svg.textContent = "";
+    const box = (x, y, w, label, sub, tone) => {
+      el("rect", { x, y, width: w, height: 46, rx: 3, fill: css(tone), stroke: css("--line") }, svg);
+      txt(svg, x + w / 2, y + 20, label, { "text-anchor": "middle", fill: css("--ink"), "font-size": 12 });
+      txt(svg, x + w / 2, y + 36, sub, { "text-anchor": "middle" });
+    };
+    const arrow = (x1, y1, x2, y2, lab, lx, ly, color) => {
+      const c = css(color || "--muted");
+      el("line", { x1, y1, x2, y2, stroke: c, "stroke-width": 1.5 }, svg);
+      const a = Math.atan2(y2 - y1, x2 - x1), s = 7;
+      el("path", { d: `M${x2} ${y2} L${x2 - s * Math.cos(a - 0.4)} ${y2 - s * Math.sin(a - 0.4)} L${x2 - s * Math.cos(a + 0.4)} ${y2 - s * Math.sin(a + 0.4)} Z`, fill: c }, svg);
+      if (lab) txt(svg, lx, ly, lab, { "text-anchor": "middle", fill: c });
+    };
+    box(20, 20, 130, "unwanted", "not resident", "--bg");
+    box(310, 20, 130, "requested", "load in flight", "--warm-soft");
+    box(310, 170, 130, "resident", "can be drawn", "--accent-soft");
+    box(20, 170, 130, "drawn", "imaging selects it", "--accent");
+    svg.lastChild.previousSibling.setAttribute("fill", css("--surface"));
+    svg.lastChild.setAttribute("fill", css("--surface"));
+    arrow(150, 36, 310, 36, "d < load radius", 230, 28, "--warm");
+    arrow(310, 56, 150, 56, "cancel: unwanted", 230, 72);
+    arrow(375, 66, 375, 170, "completes", 410, 122, "--accent");
+    arrow(310, 186, 150, 186, "imaging switch", 230, 178, "--accent");
+    arrow(150, 206, 310, 206, "switch away", 230, 222);
+    arrow(330, 170, 120, 66, "", 0, 0);
+    txt(svg, 200, 130, "d > unload radius", { "text-anchor": "middle" });
+  }
+
+  // ------------------------------------------------------------------ map
+  const map = document.getElementById("map");
+  // A 4 km x 4 km window of the march around Elderford: regions R_3_4 .. R_6_7.
+  const OX = -2000, OY = -1000, IX = 3, IY = 4;
+  const S = 600 / 4000;
+  const px = x => (x - OX) * S, py = y => (OY + 4000 - y) * S;
+  const boxDist = (x, y, x0, y0, s) => Math.hypot(Math.max(x0 - x, 0, x - (x0 + s)), Math.max(y0 - y, 0, y - (y0 + s)));
+  let cam = { x: -300, y: 500 };
+  const state = new Map();
+  let ctr = { loads: 0, unloads: 0, mb: 0 };
+  function step() {
+    const tiles = [], regions = [];
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      const rx = OX + i * REGION, ry = OY + j * REGION, rd = boxDist(cam.x, cam.y, rx, ry, REGION);
+      const rLevel = rd < R_IMG[0] ? 0 : rd < R_IMG[1] ? 1 : 2;
+      regions.push({ i, j, rx, ry, rLevel });
+      for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
+        const tx = rx + a * TILE, ty = ry + b * TILE, key = `${i}${j}${a}${b}`, d = boxDist(cam.x, cam.y, tx, ty, TILE);
+        const was = state.get(key) || false, now = was ? d <= T_UNLOAD : d < T_LOAD;
+        if (now !== was) { if (now) ctr.loads++; else ctr.unloads++; ctr.mb += MB.tFull; }
+        state.set(key, now);
+        const tLevel = rLevel !== 0 ? null : d < T_IMG[0] ? 0 : d < T_IMG[1] ? 1 : 2;
+        tiles.push({ tx, ty, d, tLevel, prefetched: now && tLevel !== 0, resident: now });
+      }
+    }
+    return { tiles, regions };
+  }
+  function drawMap({ tiles, regions }) {
+    map.textContent = "";
+    el("rect", { x: 0, y: 0, width: 600, height: 600, fill: css("--bg") }, map);
+    for (const r of regions) if (r.rLevel === 1) el("rect", { x: px(r.rx), y: py(r.ry + REGION), width: REGION * S, height: REGION * S, fill: css("--grid") }, map);
+    for (const t of tiles) {
+      if (t.tLevel === null) continue;
+      const fill = t.tLevel === 0 ? css("--accent") : t.prefetched ? css("--warm-soft") : t.tLevel === 1 ? css("--accent-soft") : css("--cool-soft");
+      el("rect", { x: px(t.tx), y: py(t.ty + TILE), width: TILE * S, height: TILE * S, fill, stroke: css("--line"), "stroke-width": 0.6 }, map);
+    }
+    for (const r of regions) {
+      el("rect", { x: px(r.rx), y: py(r.ry + REGION), width: REGION * S, height: REGION * S, fill: "none", stroke: css("--muted"), "stroke-width": 1.2 }, map);
+      txt(map, px(r.rx) + 6, py(r.ry + REGION) + 15, `R_${r.i + IX}_${r.j + IY}`);
+    }
+    const cx = px(cam.x), cy = py(cam.y);
+    const ring = (rad, c, dash, lab) => { el("circle", { cx, cy, r: rad * S, fill: "none", stroke: css(c), "stroke-width": 1.3, "stroke-dasharray": dash || "none" }, map); if (lab) txt(map, cx + 4, cy - rad * S - 4, lab, { fill: css(c), "font-size": 10.5 }); };
+    ring(T_IMG[0], "--accent", null, "220"); ring(T_LOAD, "--warm", null, "300 load"); ring(T_IMG[1], "--accent", "5 4", "420");
+    ring(R_IMG[0], "--cool", "5 4", "600"); ring(R_IMG[1], "--muted", "5 4", "1200");
+    el("circle", { cx, cy, r: 6, fill: css("--ink"), stroke: css("--surface"), "stroke-width": 2 }, map);
+  }
+  function drawStats({ tiles, regions }) {
+    const c = f => tiles.filter(f).length;
+    const rt = regions.filter(r => r.rLevel === 0).length, rm = regions.filter(r => r.rLevel === 1).length, rp = 16 - rt - rm;
+    const tf = c(t => t.tLevel === 0), tm = c(t => t.tLevel === 1), ts = c(t => t.tLevel === 2), pre = c(t => t.prefetched);
+    const drawnMB = rm * MB.rMed + rp * MB.rProxy + tf * MB.tFull + tm * MB.tMed + ts * MB.tSimp;
+    const rows = [["Camera", `${cam.x.toFixed(0)}, ${cam.y.toFixed(0)} m`], ["Regions as tiles / medium / proxy", `${rt} / ${rm} / ${rp}`],
+      ["Tiles full / medium / simplified", `${tf} / ${tm} / ${ts}`], ["Tile full prefetched", pre], ["Drawn data", `${drawnMB.toFixed(1)} MB`], null,
+      ["Tile full loads", ctr.loads], ["Tile full unloads", ctr.unloads], ["MB moved", ctr.mb.toFixed(1)]];
+    const dl = document.getElementById("stats"); dl.textContent = "";
+    for (const r of rows) {
+      if (!r) { const s = document.createElement("div"); s.className = "sep"; dl.appendChild(s); continue; }
+      const dt = document.createElement("dt"); dt.textContent = r[0]; const dd = document.createElement("dd"); dd.textContent = r[1]; dl.append(dt, dd);
+    }
+  }
+  function update() { const s = step(); drawMap(s); drawStats(s); }
+  function reset() { state.clear(); step(); ctr = { loads: 0, unloads: 0, mb: 0 }; update(); }
+  let drag = false;
+  const toWorld = e => { const r = map.getBoundingClientRect(); return { x: Math.max(OX + 1, Math.min(OX + 3999, (e.clientX - r.left) / r.width * 600 / S + OX)), y: Math.max(OY + 1, Math.min(OY + 3999, OY + 4000 - (e.clientY - r.top) / r.height * 600 / S)) }; };
+  map.addEventListener("pointerdown", e => { drag = true; map.setPointerCapture(e.pointerId); cam = toWorld(e); update(); });
+  map.addEventListener("pointermove", e => { if (drag) { cam = toWorld(e); update(); } });
+  map.addEventListener("pointerup", () => { drag = false; });
+  document.getElementById("reset").addEventListener("click", reset);
+
+  function all() { drawRings(); drawHyst(); drawStates(); update(); }
+  reset(); all();
+  const mq = matchMedia("(prefers-color-scheme: dark)");
+  if (mq.addEventListener) mq.addEventListener("change", all);
+  new MutationObserver(all).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>
+</body>
+</html>
